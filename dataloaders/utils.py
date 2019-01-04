@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+
 def decode_seg_map_sequence(label_masks, dataset='pascal'):
     rgb_masks = []
     for label_mask in label_masks:

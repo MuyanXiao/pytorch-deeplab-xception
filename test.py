@@ -12,8 +12,8 @@ from PIL import Image, ImagePalette
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from dataloaders.datasets.test_dataset import SegmentationDataset, segmentation_collate
-from dataloaders.datasets.test_transform import SegmentationTransform
+from dataloaders.mapillary.dataset import SegmentationDataset, segmentation_collate
+from dataloaders.mapillary.transform import SegmentationTransform
 
 from pytictoc import TicToc
 import time
@@ -84,6 +84,8 @@ class Tester(object):
                 output = self.model(img)
 
                 pred = output.data.cpu().numpy()
+                print(pred[0, :, 1, 1])
+                print(pred.shape)
                 pred = np.argmax(pred, axis=1)
                 pred_img = get_pred_image(pred[0])
                 print(pred[0])
