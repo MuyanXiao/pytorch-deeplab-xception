@@ -21,7 +21,7 @@ from dataloaders.mapillary import config as config, utils as utils
 from modeling.deeplab import *
 
 parser = argparse.ArgumentParser(description="PyTorch DeeplabV3Plus Training - Mapillary")
-parser.add_argument("--scales", metavar="LIST", type=str, default="[1]", help="List of scales")
+parser.add_argument("--scales", metavar="LIST", type=str, default="[0.7, 1, 1.2]", help="List of scales")
 parser.add_argument("--flip", action="store_true", help="Use horizontal flipping")
 #parser.add_argument("--fusion-mode", metavar="NAME", type=str, choices=["mean", "voting", "max"], default="mean",
 #                    help="How to fuse the outputs. Options: 'mean', 'voting', 'max'")
@@ -116,7 +116,7 @@ def main():
     )
     trainset = SegmentationDataset(traindir, crop_h, crop_w, transformation)
 
-    batch_size = 3
+    batch_size = 4
     train_loader = DataLoader(
         trainset,
         batch_size=batch_size,
@@ -189,9 +189,6 @@ def main():
         }, is_best, args.output)
 
 
-# def data_loader():
-#
-#
 def train(train_loader, model, criterion, optimizer, scheduler, epoch):
     global args, conf, logger
     # switch to train mode
@@ -215,14 +212,12 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch):
         data_time.update(time.time() - end)
 
         # compute output
-        # pred = model(inputIm)
+        # output = model(inputIm)
         output, _, pred = model(inputIm, scales, args.flip)
+        # output = nn.functional.log_softmax(output, dim=1)
+        # _, cls = output.max(1)
         loss = criterion(output, target)
         acc = accuracy(pred, target)
-
-        # measure accuracy and record loss
-        losses.update(loss, inputIm.size(0))
-        accs.update(acc, inputIm.size(0))
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -231,6 +226,10 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch):
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
+
+        # measure accuracy and record loss
+        losses.update(loss.detach(), inputIm.size(0))
+        accs.update(acc.detach(), inputIm.size(0))
         if conf["optimizer"]["clip"] != 0.:
             nn.utils.clip_grad_norm(model.parameters(), conf["optimizer"]["clip"])
         optimizer.step()
@@ -268,13 +267,15 @@ def val(val_loader, model, criterion, it=None):
             target = val_data["annot"].cuda(non_blocking=True)
 
             # compute output
+            # output = nn.functional.log_softmax(output, dim=1)
+            # _, cls = output.max(1)
             output, _, pred = model(inputIm, scales, args.flip)
             loss = criterion(output, target)
             acc = accuracy(pred, target)
 
             # measure accuracy and record loss
-            losses.update(loss, inputIm.size(0))
-            accs.update(acc, inputIm.size(0))
+            losses.update(loss.detach(), inputIm.size(0))
+            accs.update(acc.detach(), inputIm.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
