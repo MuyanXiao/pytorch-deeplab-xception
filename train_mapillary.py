@@ -169,7 +169,7 @@ def main():
         # model = load_model_weights(args.snapshot)
         args.start_epoch = 0
 
-    nb_epoch = 5
+    nb_epoch = 10
 
     for epoch in range(nb_epoch):
         # train for one epoch
@@ -381,7 +381,7 @@ def accuracy(output_cls, target):
 def save_checkpoint(state, is_best, outdir, filename='checkpoint.pth.tar'):
     torch.save(state, outdir+filename)
     if is_best:
-        shutil.copyfile(filename, outdir+'model_best.pth.tar')
+        shutil.copyfile(outdir+filename, outdir+'model_best.pth.tar')
 
 
 class AverageMeter(object):

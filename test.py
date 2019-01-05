@@ -49,7 +49,7 @@ class Tester(object):
         )
 
         # Define network
-        self.nclass = 21
+        self.nclass = 66
         model = DeepLab(num_classes=self.nclass,
                         backbone=args.backbone,
                         output_stride=args.out_stride,
