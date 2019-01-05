@@ -33,7 +33,7 @@ class SegmentationDataset(Dataset):
         # Load image
         with Image.open(self.images[item]["path"]) as img_raw:
             size = img_raw.size
-            img = self.transform(img_raw.convert(mode="RGB"))
+            img = self.transform(img_raw)  # .convert(mode="RGB"))
 
         return {"img": img, "meta": {"idx": self.images[item]["idx"], "size": size}}
 

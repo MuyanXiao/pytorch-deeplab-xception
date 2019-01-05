@@ -12,6 +12,7 @@ from PIL import Image, ImagePalette
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
+from segmentationModule import SegmentationModule
 from dataloaders.mapillary.dataset import SegmentationDataset, segmentation_collate
 from dataloaders.mapillary.transform import SegmentationTransform
 
@@ -33,8 +34,8 @@ class Tester(object):
         # Define Dataloader
         transformation = SegmentationTransform(
             1024,
-            (0.41738699, 0.45732192, 0.46886091),
-            (0.25685097, 0.26509955, 0.29067996),
+            (0.41738699 + 0.45732192 + 0.46886091) / 3,
+            (0.26509955)
         )
         testset = SegmentationDataset(args.input, transformation)
 
@@ -56,21 +57,33 @@ class Tester(object):
                         sync_bn=args.sync_bn,
                         freeze_bn=args.freeze_bn)
 
-        self.model = model
+        model = SegmentationModule(model, self.nclass)
+        self.model = model.cuda()
 
         # Using cuda
-        if args.cuda:
-            self.model = torch.nn.DataParallel(self.model, device_ids=self.args.gpu_ids)
-            patch_replication_callback(self.model)
-            self.model = self.model.cuda()
-            print(model)
+        #if args.cuda:
+        #    self.model = torch.nn.DataParallel(self.model, device_ids=self.args.gpu_ids)
+        #    patch_replication_callback(self.model)
+        #    self.model = self.model.cuda()
+        
+        print(self.model)
 
         # load model
         model_state = torch.load(self.args.premodel)
-        self.model.module.load_state_dict(model_state['state_dict'])
+        self.model.load_state_dict(model_state['state_dict'])
 
     def testing(self):
         self.model.eval()
+        scales = eval(self.args.scales)
+
+        # record the settings,training process,results in a file
+        curr_date = time.strftime("%d/%m/%Y")
+        curr_time = time.strftime("%H:%M:%S")
+        file_id = curr_date[0:2]+curr_date[3:5]+'_'+curr_time[0:2]
+
+        text_file = open(os.path.join(self.args.output, "Log_"+file_id+".txt"), "w")
+        text_file.write("Date: %s\n" % curr_date)
+        text_file.write("Start time: %s\n\n" % curr_time)
         t = TicToc()
 
         with torch.no_grad():
@@ -78,20 +91,23 @@ class Tester(object):
                 print("Testing batch [{:3d}/{:3d}]".format(batch_i + 1, len(self.test_loader)))
 
                 img = rec["img"].cuda(non_blocking=True)
-                img_name = rec["meta"][0]["idx"]
-                t.tic()
+                pred_ori, probs, preds = self.model(img, scales, self.args.flip)
 
-                output = self.model(img)
+                for i, (pred_o, prob, pred) in enumerate(zip(torch.unbind(pred_ori, dim=0), torch.unbind(probs, dim=0), torch.unbind(preds, dim=0))):
+                    out_size = rec["meta"][i]["size"]
+                    img_name = rec["meta"][i]["idx"]
 
-                pred = output.data.cpu().numpy()
-                print(pred[0, :, 1, 1])
-                print(pred.shape)
-                pred = np.argmax(pred, axis=1)
-                pred_img = get_pred_image(pred[0])
-                print(pred[0])
+                    # Save prediction
+                    pred_o = pred_o.cpu()
+                    prob = prob.cpu()
+                    pred = pred.cpu()
 
-                pred_img.save(os.path.join(self.args.output, img_name+'.png'))
-                return 0
+                    t.tic()
+                    pred_img = get_pred_image(pred, out_size)
+                    tElapse = t.tocvalue()
+                    text_file.write("Testing batch [{:3d}/{:3d}]".format(batch_i + 1, len(self.test_loader)))
+                    text_file.write("  %f\n"%tElapse)
+                    pred_img.save(os.path.join(self.args.output, img_name + ".png"))
 
 
 _PALETTE = np.array([[165, 42, 42],
@@ -137,21 +153,46 @@ _PALETTE = np.array([[165, 42, 42],
                      [33, 33, 33],
                      [100, 128, 160],
                      [142, 0, 0],
-                     [70, 100, 150]], dtype=np.uint8)
+                     [70, 100, 150],
+                     [210, 170, 100],
+                     [153, 153, 153],
+                     [128, 128, 128],
+                     [0, 0, 80],
+                     [250, 170, 30],
+                     [192, 192, 192],
+                     [220, 220, 0],
+                     [140, 140, 20],
+                     [119, 11, 32],
+                     [150, 0, 255],
+                     [0, 60, 100],
+                     [0, 0, 142],
+                     [0, 0, 90],
+                     [0, 0, 230],
+                     [0, 80, 100],
+                     [128, 64, 64],
+                     [0, 0, 110],
+                     [0, 0, 70],
+                     [0, 0, 192],
+                     [32, 32, 32],
+                     [120, 10, 10],
+                     [0, 0, 0]], dtype=np.uint8)
 _PALETTE = np.concatenate([_PALETTE, np.zeros((256 - _PALETTE.shape[0], 3), dtype=np.uint8)], axis=0)
 _PALETTE = ImagePalette.ImagePalette(
     palette=list(_PALETTE[:, 0]) + list(_PALETTE[:, 1]) + list(_PALETTE[:, 2]), mode="RGB")
 
 
-def get_pred_image(pred):
+def get_pred_image(pred, out_size):
+    pred = pred.numpy()
     img = Image.fromarray(pred.astype(np.uint8), mode='P')
     img.putpalette(_PALETTE)
 
-    return img
+    return img.resize(out_size, Image.NEAREST)
 
 
 def main():
     parser = argparse.ArgumentParser(description="PyTorch DeeplabV3Plus Testing")
+    parser.add_argument("--scales", metavar="LIST", type=str, default="[0.7, 1, 1.2]", help="List of scales")
+    parser.add_argument("--flip", action="store_true", help="Use horizontal flipping")
     parser.add_argument('--backbone', type=str, default='resnet',
                         choices=['resnet', 'xception', 'drn', 'mobilenet'],
                         help='backbone name (default: resnet)')

@@ -22,7 +22,8 @@ class SegmentationModule(nn.Module):
             self.counter = 0
 
         def update(self, sem_logits):
-            probs = functional.log_softmax(sem_logits, dim=1)
+            # probs = functional.log_softmax(sem_logits, dim=1)
+            probs = functional.softmax(sem_logits, dim=1)
             self.counter += 1
             self.buffer.add_((probs - self.buffer) / self.counter)
 
