@@ -21,14 +21,14 @@ class SegmentationTransform:
                 out_size = tuple(int(dim * scale) for dim in img.size)
                 img = img.resize(out_size, resample=resample_mode)
 
-        """
+
         # Scaling
         scale = self.longest_max_size / float(max(img.size[0], img.size[1]))
         if scale < 1.:
             out_size = tuple(int(dim * scale) for dim in img.size)
             img = img.resize(out_size, resample=Image.BILINEAR)
         
-
+        """
         # Convert to torch and normalize
         if normalize:
             img = tfn.to_tensor(img)

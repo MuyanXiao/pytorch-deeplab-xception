@@ -107,7 +107,7 @@ def main():
     valdir = os.path.join(args.input, 'validation/')
 
     # train_loader, val_loader
-    crop_h = 336
+    crop_h = 448
     crop_w = 448
     transformation = SegmentationTransform(
         2048,
@@ -116,7 +116,7 @@ def main():
     )
     trainset = SegmentationDataset(traindir, crop_h, crop_w, transformation)
 
-    batch_size = 4
+    batch_size = 3
     train_loader = DataLoader(
         trainset,
         batch_size=batch_size,
@@ -166,10 +166,13 @@ def main():
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
     else:
+        # model_state = torch.load(args.snapshot)
+        # model.load_state_dict(model_state['state_dict'])
+        model = load_snapshot(model, args.snapshot)
         # model = load_model_weights(args.snapshot)
         args.start_epoch = 0
 
-    nb_epoch = 10
+    nb_epoch = 20
 
     for epoch in range(nb_epoch):
         # train for one epoch
@@ -376,6 +379,25 @@ def accuracy(output_cls, target):
     # head.load_state_dict(data["state_dict"]["head"])
     #
     # return first, body, head, data["state_dict"]["cls"]
+
+def load_snapshot(model, snapshot_file):
+    """
+    Load initial weight from imagenet trained model
+    The first and the last layer are different, and are not loaded
+    """
+    state_dict = torch.load(snapshot_file)
+    model_dict = model.state_dict()
+
+    i = 0
+    for name in model_dict:
+        print(i, name)
+
+        if i not in [0, 678, 679]:
+            model_dict[name] = state_dict["state_dict"][name[8:]]
+        i += 1
+
+    model.load_state_dict(model_dict)
+    return model
 
 
 def save_checkpoint(state, is_best, outdir, filename='checkpoint.pth.tar'):
